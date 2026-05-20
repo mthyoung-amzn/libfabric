@@ -65,11 +65,11 @@ jobs:
         queries: security-extended,security-and-quality
 
 
-    # Install dependencies
-    - name: Install EFA Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libibverbs-dev librdmacm-dev
+    # Install extra dependencies for 
+    # - name: Install Provider Dependencies
+    #   run: |
+    #     sudo apt-get update
+    #     sudo apt-get install -y libibverbs-dev librdmacm-dev
 
     # Autobuild attempts to build any compiled languages (C/C++, C#, Go, Java, or Swift).
     # If this step fails, then you should remove it and run the build manually (see below)
