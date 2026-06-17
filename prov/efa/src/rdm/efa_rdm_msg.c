@@ -89,15 +89,32 @@ int efa_rdm_msg_select_rtm(struct efa_rdm_ep *efa_rdm_ep, struct efa_rdm_ope *tx
 	if (use_p2p &&
 	    txe->total_len >= g_efa_hmem_info[iface].min_read_msg_size &&
 	    efa_rdm_interop_rdma_read(efa_rdm_ep, txe->peer) &&
-	    (txe->desc[0] || efa_is_cache_available(efa_rdm_ep_domain(efa_rdm_ep))))
+	    (txe->desc[0] || efa_is_cache_available(efa_rdm_ep_domain(efa_rdm_ep)))) {
+		EFA_INFO(FI_LOG_EP_DATA,
+			 "HMEM DEBUG: selecting readbase_rtm: len=%zu iface=%d use_p2p=%d desc=%p min_read_msg_size=%zu\n",
+			 txe->total_len, iface, use_p2p, txe->desc[0],
+			 g_efa_hmem_info[iface].min_read_msg_size);
 		return readbase_rtm;
+	}
 
-	if (txe->total_len <= eager_rtm_max_data_size)
+	if (txe->total_len <= eager_rtm_max_data_size) {
+		if (iface != FI_HMEM_SYSTEM) {
+			EFA_INFO(FI_LOG_EP_DATA,
+				 "HMEM DEBUG: selecting eager_rtm for GPU buf: len=%zu iface=%d use_p2p=%d desc=%p min_read=%zu eager_max=%zu\n",
+				 txe->total_len, iface, use_p2p, txe->desc[0],
+				 g_efa_hmem_info[iface].min_read_msg_size, eager_rtm_max_data_size);
+		}
 		return eager_rtm;
+	}
 
 	if (txe->total_len <= g_efa_hmem_info[iface].max_medium_msg_size)
 		return medium_rtm;
 
+	if (iface != FI_HMEM_SYSTEM) {
+		EFA_INFO(FI_LOG_EP_DATA,
+			 "HMEM DEBUG: selecting longcts_rtm for GPU buf: len=%zu iface=%d use_p2p=%d desc=%p\n",
+			 txe->total_len, iface, use_p2p, txe->desc[0]);
+	}
 	return longcts_rtm;
 }
 
