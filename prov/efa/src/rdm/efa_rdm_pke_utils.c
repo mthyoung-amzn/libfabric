@@ -88,11 +88,22 @@ ssize_t efa_rdm_pke_init_payload_from_ope(struct efa_rdm_pke *pke,
 		pke->payload_size = data_size;
 		pke->payload_mr = ope->desc[tx_iov_index];
 		pke->pkt_size = payload_offset + data_size;
+		EFA_INFO(FI_LOG_EP_DATA,
+			 "HMEM DEBUG: zero-copy send, payload=%p size=%zu mr=%p\n",
+			 pke->payload, data_size, (void *)pke->payload_mr);
 		return 0;
 	}
 
 	copied = efa_rdm_pke_copy_from_hmem_iov(
 		iov_mr, pke, ope, payload_offset, segment_offset, data_size);
+
+	if (iov_mr && iov_mr->efa_mr.iface != FI_HMEM_SYSTEM) {
+		EFA_INFO(FI_LOG_EP_DATA,
+			 "HMEM DEBUG: COPY path for GPU buf! size=%zu iface=%d p2p=%d inject=%d iov_offset=%zu data_size=%zu iov_len=%zu\n",
+			 data_size, iov_mr->efa_mr.iface, mr_p2p_available,
+			 !!(ope->fi_flags & FI_INJECT), tx_iov_offset, data_size,
+			 ope->iov[tx_iov_index].iov_len);
+	}
 
 	assert(copied == data_size);
 	pke->payload = pke->wiredata + payload_offset;
