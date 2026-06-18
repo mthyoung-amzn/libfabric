@@ -91,9 +91,11 @@ int efa_rdm_msg_select_rtm(struct efa_rdm_ep *efa_rdm_ep, struct efa_rdm_ope *tx
 	    efa_rdm_interop_rdma_read(efa_rdm_ep, txe->peer) &&
 	    (txe->desc[0] || efa_is_cache_available(efa_rdm_ep_domain(efa_rdm_ep)))) {
 		EFA_INFO(FI_LOG_EP_DATA,
-			 "HMEM DEBUG: selecting readbase_rtm: len=%zu iface=%d use_p2p=%d desc=%p min_read_msg_size=%zu\n",
-			 txe->total_len, iface, use_p2p, txe->desc[0],
-			 g_efa_hmem_info[iface].min_read_msg_size);
+			 "HMEM DEBUG: selecting readbase_rtm=%d (RUNTREAD_TAG=%d LONGREAD_TAG=%d): "
+			 "len=%zu iface=%d num_read_in_flight=%zu\n",
+			 readbase_rtm, EFA_RDM_RUNTREAD_TAGRTM_PKT, EFA_RDM_LONGREAD_TAGRTM_PKT,
+			 txe->total_len, iface,
+			 (size_t)efa_rdm_ep_domain(efa_rdm_ep)->num_read_msg_in_flight);
 		return readbase_rtm;
 	}
 

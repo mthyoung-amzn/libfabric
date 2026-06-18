@@ -182,6 +182,9 @@ efa_rdm_pke_post_remote_read_or_nack(struct efa_rdm_ep *ep,
 		return err;
 
 	p2p_avail = err;
+	EFA_INFO(FI_LOG_EP_DATA,
+		 "HMEM DEBUG: post_remote_read_or_nack: p2p_avail=%d desc[0]=%p pkt_type=%d\n",
+		 p2p_avail, (void *)rxe->desc[0], pkt_type);
 	if (p2p_avail) {
 		err = efa_rdm_ope_post_remote_read_or_queue(rxe);
 	} else {
