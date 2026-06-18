@@ -1716,9 +1716,19 @@ int efa_rdm_ope_post_remote_read_or_queue(struct efa_rdm_ope *ope)
 		return err;
 	}
 
+	EFA_INFO(FI_LOG_EP_DATA,
+		 "HMEM DEBUG: posting remote read: total_len=%zu outstanding_tx=%zu/%zu\n",
+		 ope->bytes_read_total_len,
+		 (size_t)ope->ep->efa_outstanding_tx_ops,
+		 (size_t)ope->ep->efa_max_outstanding_tx_ops);
+
 	err = efa_rdm_ope_post_read(ope);
 	switch (err) {
 	case -FI_EAGAIN:
+		EFA_INFO(FI_LOG_EP_DATA,
+			 "HMEM DEBUG: remote read QUEUED (FI_EAGAIN) outstanding_tx=%zu/%zu\n",
+			 (size_t)ope->ep->efa_outstanding_tx_ops,
+			 (size_t)ope->ep->efa_max_outstanding_tx_ops);
 		dlist_insert_tail(&ope->queued_entry,
 				  &efa_rdm_ep_domain(ope->ep)->ope_queued_list);
 		ope->internal_flags |= EFA_RDM_OPE_QUEUED_READ;
