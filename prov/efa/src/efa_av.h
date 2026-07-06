@@ -11,7 +11,7 @@
 #include "efa_conn.h"
 
 #define EFA_MIN_AV_SIZE (16384)
-#define EFA_SHM_MAX_AV_COUNT       (256)
+#define EFA_SHM_MAX_AV_COUNT       (4096)
 
 struct efa_ep_addr {
 	uint8_t			raw[EFA_GID_LEN];
