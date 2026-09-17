@@ -120,7 +120,7 @@ static inline void efa_hmem_info_check_p2p_support_cuda(struct efa_hmem_info *in
 	CUdevice cu_dev;
 	CUcontext cu_ctx = NULL;
 	CUresult cu_ret;
-	CUdeviceptr ptr = 0;
+	void *ptr = 0;
 	struct ibv_mr *ibv_mr;
 	struct ibv_pd *ibv_pd;
 	int ibv_access = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ;
@@ -161,7 +161,7 @@ static inline void efa_hmem_info_check_p2p_support_cuda(struct efa_hmem_info *in
 		own_cuda_ctx = true;
 	}
 
-	cu_ret = ofi_cuMemAlloc(&ptr, len);
+	cu_ret = ofi_cudaMalloc(&ptr, len);
 	if (cu_ret != CUDA_SUCCESS) {
 		info->initialized = false;
 		EFA_WARN(FI_LOG_CORE, "Failed to allocate CUDA buffer: %d\n", cu_ret);
@@ -174,7 +174,7 @@ static inline void efa_hmem_info_check_p2p_support_cuda(struct efa_hmem_info *in
 	ibv_pd = ibv_alloc_pd(g_efa_selected_device_list[0].ibv_ctx);
 	if (!ibv_pd) {
 		EFA_WARN(FI_LOG_CORE, "failed to allocate ibv_pd: %d\n", errno);
-		ofi_cuMemFree(ptr);
+		ofi_cudaFree(ptr);
 		if (own_cuda_ctx) {
 			ofi_cuCtxDestroy(cu_ctx);
 		}
@@ -217,7 +217,7 @@ static inline void efa_hmem_info_check_p2p_support_cuda(struct efa_hmem_info *in
 		info->p2p_supported_by_device = false;
 		EFA_WARN(FI_LOG_CORE,
 			 "Failed to register CUDA buffer with the EFA device, FI_HMEM transfers that require peer to peer support will fail.\n");
-		ofi_cuMemFree(ptr);
+		ofi_cudaFree(ptr);
 		(void) ibv_dealloc_pd(ibv_pd);
 		if (own_cuda_ctx) {
 			ofi_cuCtxDestroy(cu_ctx);
@@ -226,7 +226,7 @@ static inline void efa_hmem_info_check_p2p_support_cuda(struct efa_hmem_info *in
 	}
 
 	ret = ibv_dereg_mr(ibv_mr);
-	ofi_cuMemFree(ptr);
+	ofi_cudaFree(ptr);
 	(void) ibv_dealloc_pd(ibv_pd);
 	if (ret) {
 		EFA_WARN(FI_LOG_CORE,
