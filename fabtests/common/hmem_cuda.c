@@ -374,6 +374,7 @@ int ft_cuda_init(void)
 		goto err_dlclose_cuda;
 	}
 
+	cuda_ops.cudaFree(NULL);
 
 	return FI_SUCCESS;
 

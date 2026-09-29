@@ -138,6 +138,7 @@ static inline void efa_hmem_info_check_p2p_support_cuda(struct efa_hmem_info *in
 	}
 
 	if (!cu_ctx) {
+		EFA_INFO(FI_LOG_CORE, "Pushing CUDA ctx to probe p2p support");
 		cu_ret = ofi_cuDeviceGet(&cu_dev, 0);
 		if (cu_ret != CUDA_SUCCESS) {
 			info->initialized = false;
@@ -220,6 +221,7 @@ static inline void efa_hmem_info_check_p2p_support_cuda(struct efa_hmem_info *in
 		ofi_cudaFree(ptr);
 		(void) ibv_dealloc_pd(ibv_pd);
 		if (own_cuda_ctx) {
+			EFA_INFO(FI_LOG_CORE, "Popping CUDA ctx to probe p2p support");
 			ofi_cuCtxDestroy(cu_ctx);
 		}
 		return;
@@ -240,6 +242,7 @@ static inline void efa_hmem_info_check_p2p_support_cuda(struct efa_hmem_info *in
 
 	info->p2p_supported_by_device = true;
 	if (own_cuda_ctx) {
+		EFA_INFO(FI_LOG_CORE, "Popping CUDA ctx to probe p2p support");
 		ofi_cuCtxDestroy(cu_ctx);
 	}
 
