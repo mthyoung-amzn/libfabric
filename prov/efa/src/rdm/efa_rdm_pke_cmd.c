@@ -446,7 +446,26 @@ void efa_rdm_pke_handle_tx_error(struct efa_rdm_pke *pkt_entry, int prov_errno)
 		}
 
 		if (prov_errno == EFA_IO_COMP_STATUS_REMOTE_ERROR_RNR) {
-			if (ep->handle_resource_management == FI_RM_DISABLED) {
+			if (efa_rdm_pkt_type_of(pkt_entry) == EFA_RDM_PEER_ERROR_PKT) {
+				/*
+				 * Keep retrying the PEER_ERROR_PKT so a receiver
+				 * that resumes can skip the msg_id, but stop
+				 * holding the application's completion hostage to
+				 * a receiver that has stopped posting buffers.
+				 */
+				if (!(txe->internal_flags &
+				      EFA_RDM_TXE_PEER_ABORT_COMPLETION_WRITTEN) &&
+				    ofi_gettime_us() - txe->peer_error_emit_us >=
+				    EFA_RDM_PEER_ERROR_LOCAL_COMPLETION_TIMEOUT) {
+					EFA_WARN(FI_LOG_CQ,
+						 "Peer has not accepted PEER_ERROR_PKT for "
+						 "msg_id %u; completing the abort locally and "
+						 "retrying in the background.\n",
+						 txe->msg_id);
+					efa_rdm_txe_write_deferred_peer_abort_completion(txe);
+				}
+				efa_rdm_ep_queue_rnr_pkt(ep, pkt_entry);
+			} else if (ep->handle_resource_management == FI_RM_DISABLED) {
 				/*
 				 * Write an error to the application for RNR when resource
 				 * management is disabled.
@@ -461,17 +480,18 @@ void efa_rdm_pke_handle_tx_error(struct efa_rdm_pke *pkt_entry, int prov_errno)
 				}
 
 				efa_rdm_pke_release_tx(pkt_entry);
-				if (!txe->efa_outstanding_tx_ops)
+				/* A two-sided send is now peer-aborting: the drain
+				 * emits PEER_ERROR_PKT and writes the completion. */
+				if (txe->internal_flags & EFA_RDM_OPE_PEER_ABORT_PENDING)
+					efa_rdm_txe_progress_peer_abort_if_drained(txe);
+				else if (!txe->efa_outstanding_tx_ops)
 					efa_rdm_txe_release(txe);
-			} else if (efa_rdm_pkt_type_of(pkt_entry) != EFA_RDM_PEER_ERROR_PKT &&
-				   (txe->state == EFA_RDM_OPE_ERR ||
-				    !efa_rdm_mr_gen_check_ope(txe))) {
+			} else if (txe->state == EFA_RDM_OPE_ERR ||
+				   !efa_rdm_mr_gen_check_ope(txe)) {
 				/*
 				 * The txe already errored or its source MR was
 				 * closed, so a repost can never succeed. Take the
-				 * MR abort path instead of requeueing. The
-				 * PEER_ERROR_PKT is still requeued: it does not use
-				 * the source MR and the receiver needs it.
+				 * MR abort path instead of requeueing.
 				 */
 				efa_rdm_pke_release_tx(pkt_entry);
 				efa_rdm_txe_handle_error(txe, FI_ECANCELED,

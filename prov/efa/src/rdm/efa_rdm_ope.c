@@ -867,15 +867,24 @@ void efa_rdm_rxe_emit_peer_error(struct efa_rdm_ope *rxe, int prov_errno)
  * wire to the peer in the PEER_ERROR_PKT. All cq_entry fields are stable across
  * the abort window, so nothing needs snapshotting.
  */
-static void efa_rdm_txe_write_deferred_peer_abort_completion(struct efa_rdm_ope *txe)
+void efa_rdm_txe_write_deferred_peer_abort_completion(struct efa_rdm_ope *txe)
 {
 	struct efa_rdm_ep *ep = txe->ep;
 	struct fi_cq_err_entry err_entry;
 	char err_msg[EFA_ERROR_MSG_BUFFER_LENGTH] = {0};
 
+	if (txe->internal_flags & EFA_RDM_TXE_PEER_ABORT_COMPLETION_WRITTEN)
+		return;
+	txe->internal_flags |= EFA_RDM_TXE_PEER_ABORT_COMPLETION_WRITTEN;
+
 	memset(&err_entry, 0, sizeof(err_entry));
-	err_entry.err = FI_ECANCELED;
-	err_entry.prov_errno = FI_EFA_ERR_PEER_ABORTED;
+	if (txe->internal_flags & EFA_RDM_TXE_ABORT_REPORTS_SEND_ERR) {
+		err_entry.err = to_fi_errno(txe->peer_error_prov_errno);
+		err_entry.prov_errno = txe->peer_error_prov_errno;
+	} else {
+		err_entry.err = FI_ECANCELED;
+		err_entry.prov_errno = FI_EFA_ERR_PEER_ABORTED;
+	}
 	err_entry.flags = txe->cq_entry.flags;
 	err_entry.op_context = txe->cq_entry.op_context;
 	err_entry.buf = txe->cq_entry.buf;
@@ -957,6 +966,7 @@ void efa_rdm_txe_progress_peer_abort_if_drained(struct efa_rdm_ope *txe)
 	     efa_rdm_peer_support_peer_error(txe->peer));
 	if (peer_support_err_pkt) {
 		txe->internal_flags |= EFA_RDM_PEER_ERROR_EMITTED_OR_SKIPPED;
+		txe->peer_error_emit_us = ofi_gettime_us();
 		/* The PEER_ERROR_PKT carries no user payload, and from here on
 		 * this txe only ever (re)posts that packet. Drop its source-MR
 		 * association so the requeue-path MR gen check cannot cancel the
@@ -1047,6 +1057,8 @@ void efa_rdm_txe_release_read_msg_slot(struct efa_rdm_ope *txe)
 static bool efa_rdm_txe_mark_peer_abort_if_needed(struct efa_rdm_ope *txe,
 						  int prov_errno)
 {
+	bool report_send_err = false;
+
 	/*
 	 * This check must come first in order to properly handle txe errors
 	 * on READ based protocols.
@@ -1056,9 +1068,16 @@ static bool efa_rdm_txe_mark_peer_abort_if_needed(struct efa_rdm_ope *txe,
 
 	/* Definitive MR-cancel signal: if the source MR's gen still matches what
 	 * was captured at dispatch, the MR is intact and this is an ordinary
-	 * error the caller should report -- not a peer abort. */
-	if (OFI_LIKELY(efa_rdm_mr_gen_check_ope(txe)))
-		return false;
+	 * error the caller should report -- not a peer abort. The exception
+	 * is an RNR made final by FI_RM_DISABLED: the receiver is alive and
+	 * its reorder window is waiting on this msg_id, so it still needs a
+	 * PEER_ERROR_PKT to skip it. */
+	if (OFI_LIKELY(efa_rdm_mr_gen_check_ope(txe))) {
+		if (prov_errno != EFA_IO_COMP_STATUS_REMOTE_ERROR_RNR ||
+		    txe->ep->handle_resource_management != FI_RM_DISABLED)
+			return false;
+		report_send_err = true;
+	}
 
 	/* Emulated 1-sided operations are not supported by MR Abort */
 	if (!efa_rdm_ope_is_peer_abort_capable(txe))
@@ -1076,6 +1095,8 @@ static bool efa_rdm_txe_mark_peer_abort_if_needed(struct efa_rdm_ope *txe,
 
 	txe->peer_error_prov_errno = prov_errno;
 	txe->internal_flags |= EFA_RDM_OPE_PEER_ABORT_PENDING;
+	if (report_send_err)
+		txe->internal_flags |= EFA_RDM_TXE_ABORT_REPORTS_SEND_ERR;
 
 	/*
 	 * A posted LONGREAD RTM or tail-read RUNTREAD first segment bumped

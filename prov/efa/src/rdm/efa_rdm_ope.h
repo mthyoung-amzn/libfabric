@@ -219,7 +219,17 @@ struct efa_rdm_ope {
 	 * PEER_ERROR_PKT is being emitted from this ope.
 	 */
 	int peer_error_prov_errno;
+
+	/* When this txe's PEER_ERROR_PKT was first posted, for
+	 * EFA_RDM_PEER_ERROR_LOCAL_COMPLETION_TIMEOUT. */
+	uint64_t peer_error_emit_us;
 };
+
+/* If a sender-side PEER_ERROR_PKT is still being RNR'd this long after it was
+ * first posted, write the withheld completion instead of waiting for the
+ * receiver. The packet keeps being retried so a receiver that resumes can
+ * still skip the msg_id. Unit is us. */
+#define EFA_RDM_PEER_ERROR_LOCAL_COMPLETION_TIMEOUT 1000000
 
 /* Every bit set is reserved as an ope id that is never legal, so a peer-owned
  * id that has not been learned yet cannot be mistaken for a pool index. */
@@ -525,6 +535,20 @@ void efa_rdm_rxe_release_internal(struct efa_rdm_ope *rxe);
 #define EFA_RDM_TXE_READ_MSG_COUNTED		BIT_ULL(22)
 
 /**
+ * @brief the peer abort was triggered by a final send error, not an MR
+ * close, so the withheld completion reports that error instead of
+ * FI_ECANCELED.
+ */
+#define EFA_RDM_TXE_ABORT_REPORTS_SEND_ERR	BIT_ULL(23)
+
+/**
+ * @brief the withheld peer-abort completion was already written because the
+ * peer stopped accepting the PEER_ERROR_PKT; the txe stays alive only to keep
+ * retrying that packet.
+ */
+#define EFA_RDM_TXE_PEER_ABORT_COMPLETION_WRITTEN	BIT_ULL(24)
+
+/**
  * @brief release this txe's num_read_msg_in_flight slot, if it holds one.
  *
  * Test-and-clears EFA_RDM_TXE_READ_MSG_COUNTED so concurrent resolution
@@ -559,6 +583,8 @@ size_t efa_rdm_ope_mulreq_total_data_size(struct efa_rdm_ope *ope, int pkt_type)
 size_t efa_rdm_txe_max_req_data_capacity(struct efa_rdm_ep *ep, struct efa_rdm_ope *txe, int pkt_type);
 
 void efa_rdm_txe_handle_error(struct efa_rdm_ope *txe, int err, int prov_errno);
+
+void efa_rdm_txe_write_deferred_peer_abort_completion(struct efa_rdm_ope *txe);
 
 void efa_rdm_rxe_handle_error(struct efa_rdm_ope *rxe, int err, int prov_errno);
 
