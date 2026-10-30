@@ -17,6 +17,9 @@ struct efa_rdm_domain {
 	size_t			rdm_cq_size;
 	/* number of rdma-read messages in flight */
 	ofi_atomic64_t		num_read_msg_in_flight;
+	/* bumped on every MR deregistration; CQ progress compares it to find
+	 * txes whose source MR was closed while they wait on the peer */
+	ofi_atomic32_t		mr_dereg_cnt;
 	/* LRU list of AH entries in this domain */
 	struct dlist_entry ah_lru_list OFI_TSA_GUARDED_BY(efa_util_domain_lock_sym);
 };

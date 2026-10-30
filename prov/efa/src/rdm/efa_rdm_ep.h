@@ -252,6 +252,9 @@ int efa_rdm_ep_flush_queued_blocking_copy_to_hmem(struct efa_rdm_ep *ep);
 void efa_rdm_ep_progress_peers_and_queues(struct efa_rdm_ep *ep)
 	OFI_TSA_REQUIRES(efa_progress_ep_list_lock_sym, efa_srx_lock_sym);
 
+void efa_rdm_ep_abort_idle_txe_with_closed_mr(struct efa_rdm_ep *ep)
+	OFI_TSA_REQUIRES(efa_srx_lock_sym);
+
 void efa_rdm_ep_enqueue_progress_list(struct efa_rdm_ep *ep);
 
 void efa_rdm_ep_dequeue_progress_list(struct efa_rdm_ep *ep)

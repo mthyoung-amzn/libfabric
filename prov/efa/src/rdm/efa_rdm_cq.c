@@ -1260,6 +1260,8 @@ static void efa_rdm_cq_progress(struct util_cq *cq)
 	struct efa_rdm_ep *efa_rdm_ep;
 	struct efa_cq *efa_cq;
 	struct fid_list_entry *fid_entry;
+	struct efa_rdm_domain *rdm_domain;
+	int32_t mr_dereg_cnt;
 
 	EFA_GENLOCK_LOCK(&cq->ep_list_lock, efa_cq_ep_list_lock_sym);
 	efa_rdm_cq = container_of(cq, struct efa_rdm_cq, efa_cq.util_cq);
@@ -1281,6 +1283,20 @@ static void efa_rdm_cq_progress(struct util_cq *cq)
 			EFA_GENLOCK_UNLOCK(&efa_rdm_ep->srx_lock, efa_srx_lock_sym);
 		}
 		efa_rdm_cq->need_to_scan_ep_list = false;
+	}
+
+	rdm_domain = container_of(cq->domain, struct efa_rdm_domain,
+				  efa_domain.util_domain);
+	mr_dereg_cnt = ofi_atomic_get32(&rdm_domain->mr_dereg_cnt);
+	if (OFI_UNLIKELY(mr_dereg_cnt != efa_rdm_cq->mr_dereg_cnt_seen)) {
+		efa_rdm_cq->mr_dereg_cnt_seen = mr_dereg_cnt;
+		dlist_foreach(&cq->ep_list, item) {
+			fid_entry = container_of(item, struct fid_list_entry, entry);
+			efa_rdm_ep = container_of(fid_entry->fid, struct efa_rdm_ep, base_ep.util_ep.ep_fid.fid);
+			EFA_GENLOCK_LOCK(&efa_rdm_ep->srx_lock, efa_srx_lock_sym);
+			efa_rdm_ep_abort_idle_txe_with_closed_mr(efa_rdm_ep);
+			EFA_GENLOCK_UNLOCK(&efa_rdm_ep->srx_lock, efa_srx_lock_sym);
+		}
 	}
 	EFA_GENLOCK_UNLOCK(&cq->ep_list_lock, efa_cq_ep_list_lock_sym);
 

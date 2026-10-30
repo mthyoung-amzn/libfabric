@@ -1172,6 +1172,41 @@ void efa_rdm_ep_dequeue_progress_list(struct efa_rdm_ep *ep)
 			   efa_progress_ep_list_lock_sym);
 }
 
+/**
+ * @brief Abort two-sided sends whose source MR was closed while they wait
+ *        on the peer (long-CTS waiting for a CTS, long-read or runting-read
+ *        waiting for the receiver to read and send EOR).
+ *
+ * Such a txe has no WR in flight and is on no queue, so none of the MR gen
+ * checks on the repost paths ever run for it, and a receiver that has stopped
+ * progressing never reports a failed read. Called from CQ progress only when
+ * an MR has been deregistered since the last scan.
+ */
+void efa_rdm_ep_abort_idle_txe_with_closed_mr(struct efa_rdm_ep *ep)
+	OFI_TSA_REQUIRES(efa_srx_lock_sym)
+{
+	struct dlist_entry *entry, *tmp;
+	struct efa_rdm_ope *ope;
+
+	dlist_foreach_safe(&ep->base_ep.ope_list, entry, tmp) {
+		ope = container_of(entry, struct efa_rdm_ope, ep_entry);
+		if (ope->type != EFA_RDM_TXE ||
+		    (ope->state != EFA_RDM_TXE_REQ &&
+		     ope->state != EFA_RDM_OPE_SEND) ||
+		    ope->efa_outstanding_tx_ops ||
+		    (ope->internal_flags & (EFA_RDM_OPE_QUEUED_FLAGS |
+					    EFA_RDM_OPE_PEER_ABORT_PENDING |
+					    EFA_RDM_TXE_DELIVERY_COMPLETE_REQUESTED)) ||
+		    !efa_rdm_ope_is_peer_abort_capable(ope) ||
+		    !efa_rdm_pkt_type_is_rtm(ope->req_pkt_type) ||
+		    efa_rdm_mr_gen_check_ope(ope))
+			continue;
+
+		efa_rdm_txe_handle_error(ope, FI_ECANCELED,
+					 FI_EFA_ERR_PEER_ABORTED);
+	}
+}
+
 void efa_rdm_ep_progress_peers_and_queues(struct efa_rdm_ep *ep)
 	OFI_TSA_REQUIRES(efa_progress_ep_list_lock_sym, efa_srx_lock_sym)
 {

@@ -94,6 +94,7 @@ static int efa_rdm_domain_init(struct efa_rdm_domain *rdm_domain, struct fi_info
 	rdm_domain->rdm_cq_size = MAX(info->rx_attr->size + info->tx_attr->size,
 				  efa_env.cq_size);
 	ofi_atomic_initialize64(&rdm_domain->num_read_msg_in_flight, 0);
+	ofi_atomic_initialize32(&rdm_domain->mr_dereg_cnt, 0);
 
 	dlist_init(&rdm_domain->ah_lru_list);
 

@@ -492,6 +492,9 @@ static int efa_rdm_mr_dereg_impl(struct efa_rdm_mr *efa_rdm_mr)
 	 * regardless of the deregistration's progress.
 	 */
 	efa_rdm_mr_gen_bump(efa_rdm_mr);
+	ofi_atomic_inc32(&container_of(efa_rdm_mr->efa_mr.domain,
+				       struct efa_rdm_domain,
+				       efa_domain)->mr_dereg_cnt);
 
 	err = efa_mr_dereg_impl(&efa_rdm_mr->efa_mr);
 	if (err) {

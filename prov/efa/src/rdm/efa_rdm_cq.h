@@ -21,6 +21,8 @@ struct efa_rdm_cq {
 	struct ofi_genlock progress_ep_list_lock;
 	size_t entry_size;
 	bool need_to_scan_ep_list;
+	/* last efa_rdm_domain::mr_dereg_cnt this CQ scanned for */
+	int32_t mr_dereg_cnt_seen;
 };
 
 int efa_rdm_cq_open(struct fid_domain *domain, struct fi_cq_attr *attr,
