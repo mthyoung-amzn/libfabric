@@ -23,6 +23,7 @@
  */
 #define EFA_RDM_PEER_HANDSHAKE_QUEUED      BIT_ULL(5)
 #define EFA_RDM_PEER_UNRESP                BIT_ULL(6) /**< peer is unresponsive and we should not wait for completions */
+#define EFA_RDM_PEER_RESET_WARNED          BIT_ULL(7) /**< already warned that msg_ids from this peer look desynchronized */
 
 
 OFI_DECL_RECVWIN_BUF(struct efa_rdm_pke*, efa_rdm_robuf, uint32_t);

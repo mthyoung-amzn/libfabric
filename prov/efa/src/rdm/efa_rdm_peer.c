@@ -211,9 +211,23 @@ int efa_rdm_peer_reorder_msg(struct efa_rdm_peer *peer, struct efa_rdm_ep *ep,
 		return 0;
 	else if (!ofi_recvwin_id_valid(robuf, msg_id)) {
 		if (ofi_recvwin_id_processed(robuf, msg_id)) {
-			EFA_WARN(FI_LOG_EP_CTRL,
-			       "Error: message id has already been processed. received: %" PRIu32 " expected: %"
-			       PRIu32 "\n", msg_id, ofi_recvwin_next_exp_id(robuf));
+			if (robuf->exp_msg_id - msg_id > robuf->win_size) {
+				/* Too far behind to be a duplicate. */
+				if (!(peer->flags & EFA_RDM_PEER_RESET_WARNED)) {
+					peer->flags |= EFA_RDM_PEER_RESET_WARNED;
+					EFA_WARN(FI_LOG_EP_CTRL,
+						 "Peer restarted its msg_id sequence (received %" PRIu32
+						 ", expected %" PRIu32 "). It dropped its state for this "
+						 "endpoint (fi_av_remove + fi_av_insert on one side only). "
+						 "Its messages will be dropped until both sides remove and "
+						 "re-insert each other.\n",
+						 msg_id, ofi_recvwin_next_exp_id(robuf));
+				}
+			} else {
+				EFA_WARN(FI_LOG_EP_CTRL,
+				       "Error: message id has already been processed. received: %" PRIu32 " expected: %"
+				       PRIu32 "\n", msg_id, ofi_recvwin_next_exp_id(robuf));
+			}
 
 #if ENABLE_DEBUG
 			/* Print debug info on duplicate message */
@@ -233,6 +247,19 @@ int efa_rdm_peer_reorder_msg(struct efa_rdm_peer *peer, struct efa_rdm_ep *ep,
 			 */
 			struct efa_rdm_peer_overflow_pke_list_entry *overflow_pke_list_entry;
 
+			/* A fresh peer whose first message is far beyond the
+			 * window: the sender likely kept counters from an earlier
+			 * peer. */
+			if (robuf->exp_msg_id == 0 && msg_id > 4 * robuf->win_size &&
+			    !(peer->flags & EFA_RDM_PEER_RESET_WARNED)) {
+				peer->flags |= EFA_RDM_PEER_RESET_WARNED;
+				EFA_WARN(FI_LOG_EP_CTRL,
+					 "First message from peer has msg_id %" PRIu32
+					 ", expected 0. This endpoint likely dropped its state for "
+					 "the peer (fi_av_remove + fi_av_insert) but the peer did not. "
+					 "Its messages will not be delivered until both sides "
+					 "remove and re-insert each other.\n", msg_id);
+			}
 			overflow_pke_list_entry = ofi_buf_alloc(ep->overflow_pke_pool);
 			if (OFI_UNLIKELY(!overflow_pke_list_entry)) {
 				EFA_WARN(FI_LOG_EP_CTRL, "Unable to allocate an overflow_pke_list_entry.\n");
