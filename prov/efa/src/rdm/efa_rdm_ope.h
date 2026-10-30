@@ -584,6 +584,8 @@ size_t efa_rdm_txe_max_req_data_capacity(struct efa_rdm_ep *ep, struct efa_rdm_o
 
 void efa_rdm_txe_handle_error(struct efa_rdm_ope *txe, int err, int prov_errno);
 
+void efa_rdm_txe_write_peer_removed_completion(struct efa_rdm_ope *txe);
+
 void efa_rdm_txe_write_deferred_peer_abort_completion(struct efa_rdm_ope *txe);
 
 void efa_rdm_rxe_handle_error(struct efa_rdm_ope *rxe, int err, int prov_errno);

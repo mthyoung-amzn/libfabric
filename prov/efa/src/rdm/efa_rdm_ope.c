@@ -1021,6 +1021,41 @@ void efa_rdm_txe_progress_peer_abort_if_drained(struct efa_rdm_ope *txe)
 	efa_rdm_txe_release(txe);
 }
 
+/**
+ * @brief Write FI_ECANCELED for a txe being freed by fi_av_remove.
+ *
+ * Skips txes that already reported an outcome (internal ops, ops that report
+ * synchronously, and errored txes whose completion was not withheld).
+ */
+void efa_rdm_txe_write_peer_removed_completion(struct efa_rdm_ope *txe)
+{
+	struct fi_cq_err_entry err_entry;
+	uint64_t flags = txe->internal_flags;
+
+	if (flags & EFA_RDM_OPE_INTERNAL)
+		return;
+	if (flags & EFA_RDM_TXE_PEER_ABORT_COMPLETION_WRITTEN)
+		return;
+	if ((flags & EFA_RDM_TXE_NO_COMPLETION) &&
+	    (flags & EFA_RDM_TXE_NO_COUNTER))
+		return;
+	if (txe->state == EFA_RDM_OPE_ERR &&
+	    !(flags & EFA_RDM_OPE_PEER_ABORT_PENDING))
+		return;
+
+	memset(&err_entry, 0, sizeof(err_entry));
+	err_entry.err = FI_ECANCELED;
+	err_entry.prov_errno = FI_EFA_ERR_PEER_ABORTED;
+	err_entry.flags = txe->cq_entry.flags;
+	err_entry.op_context = txe->cq_entry.op_context;
+	err_entry.buf = txe->cq_entry.buf;
+	err_entry.data = txe->cq_entry.data;
+	err_entry.tag = txe->cq_entry.tag;
+	efa_cntr_report_error(&txe->ep->base_ep.util_ep, txe->cq_entry.flags);
+	efa_rdm_cq_write_error(&txe->ep->base_ep, txe->ep->base_ep.util_ep.tx_cq,
+			       &err_entry, "TXE");
+}
+
 /* Release this txe's num_read_msg_in_flight slot, if it holds one; see
  * the declaration in efa_rdm_ope.h for the exactly-once semantics. */
 void efa_rdm_txe_release_read_msg_slot(struct efa_rdm_ope *txe)

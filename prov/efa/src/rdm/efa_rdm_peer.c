@@ -125,6 +125,7 @@ void efa_rdm_peer_destruct(struct efa_rdm_peer *peer, struct efa_rdm_ep *ep)
 	dlist_foreach_container_safe(&peer->txe_list,
 				     struct efa_rdm_ope,
 				     txe, peer_entry, tmp) {
+		efa_rdm_txe_write_peer_removed_completion(txe);
 		efa_rdm_txe_release(txe);
 	}
 
@@ -149,6 +150,13 @@ void efa_rdm_peer_destruct(struct efa_rdm_peer *peer, struct efa_rdm_ep *ep)
 			efa_rdm_pke_release_rx_list(rxe->unexp_pkt);
 			rxe->unexp_pkt = NULL;
 		}
+		/* A user receive matched to this peer will never finish. */
+		if ((rxe->state == EFA_RDM_RXE_MATCHED ||
+		     rxe->state == EFA_RDM_RXE_RECV) &&
+		    !(rxe->internal_flags & EFA_RDM_OPE_INTERNAL) &&
+		    efa_rdm_ope_is_peer_abort_capable(rxe))
+			efa_rdm_rxe_handle_error(rxe, FI_ECANCELED,
+						 FI_EFA_ERR_PEER_ABORTED);
 		efa_rdm_rxe_release(rxe);
 	}
 
